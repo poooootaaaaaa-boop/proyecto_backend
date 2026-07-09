@@ -56,11 +56,5 @@ public function consultorios()
     );
 }
 // Añade esta relación al final de tu modelo DoctorModel:
-public function asistencias()
-{
-    // Usamos el namespace completo de Asistencia para evitar errores de importación
-    return $this->hasMany(\App\Models\Asistencia::class, 'doctor_id');
-}
-
 
 }
