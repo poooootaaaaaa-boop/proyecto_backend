@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 Use App\Models\Especialidad;
+Use App\Models\asistencias;
+
 
 class Doctor extends Model
 {
@@ -56,5 +58,8 @@ public function consultorios()
     );
 }
 // Añade esta relación al final de tu modelo DoctorModel:
-
+public function asistencias()
+{
+    return $this->hasMany(App\Models\asistencia::class, 'doctor_id');
+}
 }
