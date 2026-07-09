@@ -30,7 +30,10 @@ use App\Http\Controllers\PagoDoctorController;
 use App\Http\Controllers\HorarioDoctorController;
 use App\Http\Controllers\MedicamentosCaducadosController;
 use App\Http\Controllers\AsistenciaController;
-
+use App\Http\Controllers\HabitacionController;
+use App\Http\Controllers\InstrumentoMedicoController;
+use App\Http\Controllers\ConsultorioInstrumentoController;
+use App\Http\Controllers\OrdenCompraController;
 
 /*NUEVO*/
 
@@ -250,3 +253,11 @@ Route::get('/clinic/asistencias', [AsistenciaController::class, 'clinicIndex']);
 // Acciones de autogestión de asistencia del doctor
 Route::post('/asistencias', [AsistenciaController::class, 'stores']);
 Route::get('/doctores/{id}/asistencias', [AsistenciaController::class, 'doctorIndex']);
+
+
+
+
+Route::post('/ordenes-compra', [OrdenCompraController::class, 'addOrdenCompra']);
+Route::get('/ordenes-compra', [OrdenCompraController::class, 'getOrdenesCompra']);
+Route::get('/ordenes-compra/{id}', [OrdenCompraController::class, 'getOrdenCompra']);
+Route::delete('/ordenes-compra/{id}', [OrdenCompraController::class, 'deleteOrdenCompra']);
