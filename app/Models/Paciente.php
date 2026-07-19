@@ -49,5 +49,13 @@ class Paciente extends Model
     {
         return $this->hasMany(Consulta::class, 'paciente_id');
     }
+
+    public function consentimientos()
+{
+    return $this->hasMany(
+        Consentimiento::class,
+        'paciente_id'
+    );
+}
    
 }
