@@ -60,6 +60,6 @@ public function consultorios()
 // Añade esta relación al final de tu modelo DoctorModel:
 public function asistencias()
 {
-    return $this->hasMany(App\Models\asistencia::class, 'doctor_id');
+    return $this->hasMany(\App\Models\Asistencia::class, 'doctor_id');
 }
 }
