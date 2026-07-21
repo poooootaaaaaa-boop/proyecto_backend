@@ -57,9 +57,17 @@ public function consultorios()
         'doctor_id'
     );
 }
-// Añade esta relación al final de tu modelo DoctorModel:
+
 public function asistencias()
 {
     return $this->hasMany(\App\Models\Asistencia::class, 'doctor_id');
+}
+
+public function consentimientos()
+{
+    return $this->hasMany(
+        Consentimiento::class,
+        'doctor_id'
+    );
 }
 }

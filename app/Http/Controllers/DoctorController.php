@@ -2,133 +2,156 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Doctor;
-use Illuminate\Http\Request;
 use App\Models\DoctorModel;
+use App\Models\Especialidad;
+use App\Models\Usuario;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use App\Models\Especialidad;
-
 
 class DoctorController extends Controller
 {
-public function store(Request $request)
-{
-    $request->validate([
-        'nombre' => 'required|string|max:120',
-        'correo' => 'required|email|unique:usuarios,correo',
-        'password' => 'required|min:6',
-        'especialidad_id' => 'nullable|integer',
-        'cedula_profesional' => 'required|string|max:30',
-        'anios_exp' => 'nullable|integer',
-        'telefono' => 'nullable|string|max:20',
-        'imagen' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
-    ]);
-
-    DB::beginTransaction();
-
-    try {
-
-        // 🔹 1. Crear usuario
-        $usuario = \App\Models\Usuario::create([
-            'rol_id' => 3,
-            'nombre' => $request->nombre,
-            'correo' => $request->correo,
-            'telefono' => $request->telefono,
-            'password' => Hash::make($request->password),
-            'foto_url' => null
+    public function store(Request $request)
+    {
+        $request->validate([
+            'nombre'              => 'required|string|max:120',
+            'correo'               => 'required|email|unique:usuarios,correo',
+            'password'             => 'required|min:6',
+            'especialidad_id'      => 'nullable|exists:especialidades,id',
+            'cedula_profesional'   => 'required|string|max:30|unique:doctores,cedula_profesional',
+            'anios_exp'            => 'nullable|integer|min:0',
+            'telefono'             => 'nullable|string|max:20',
+            'imagen'               => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            // clinica_id ya no se hardcodea a 1: se toma del usuario autenticado
+            // o se recibe explícito si el flujo lo requiere (ej. superadmin creando en otra clínica).
+            'clinica_id'           => 'nullable|integer|exists:clinicas,id',
         ]);
 
-        // 🔹 2. SUBIR FOTO (si existe)
-        if ($request->hasFile('imagen')) {
+        DB::beginTransaction();
 
-            $archivo = $request->file('imagen');
+        try {
+            // 1. Crear usuario
+            $usuario = Usuario::create([
+                'rol_id'    => 3,
+                'nombre'    => $request->nombre,
+                'correo'    => $request->correo,
+                'telefono'  => $request->telefono,
+                'password'  => Hash::make($request->password),
+                'foto_url'  => null,
+            ]);
 
-            $nombre_archivo = 'usuario-' . $usuario->id . '.' . $archivo->getClientOriginalExtension();
+            // 2. Subir foto (si existe)
+            if ($request->hasFile('imagen')) {
+                $archivo = $request->file('imagen');
+                $nombreArchivo = 'usuario-' . $usuario->id . '.' . $archivo->getClientOriginalExtension();
 
-            $archivo->storeAs('fotos/usuarios', $nombre_archivo, 'public');
+                $archivo->storeAs('fotos/usuarios', $nombreArchivo, 'public');
 
-            $usuario->foto_url = $nombre_archivo;
-            $usuario->save();
+                $usuario->foto_url = $nombreArchivo;
+                $usuario->save();
+            }
+
+            // 3. Crear doctor
+            $doctor = DoctorModel::create([
+                'usuario_id'          => $usuario->id,
+                'clinica_id'          => $request->clinica_id ?? $request->user()?->clinica_id ?? 1,
+                'especialidad_id'     => $request->especialidad_id,
+                'cedula_profesional'  => $request->cedula_profesional,
+                'anios_exp'           => $request->anios_exp,
+                'telefono'            => $request->telefono,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Doctor creado correctamente',
+                'usuario' => $usuario,
+                'doctor'  => $doctor,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Error',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
-
-        // 🔹 3. Crear doctor
-        $doctor = DoctorModel::create([
-            'usuario_id' => $usuario->id,
-            'clinica_id' => 1,
-            'especialidad_id' => $request->especialidad_id,
-            'cedula_profesional' => $request->cedula_profesional,
-            'anios_exp' => $request->anios_exp,
-            'telefono' => $request->telefono,
-        ]);
-
-        DB::commit();
-
-        return response()->json([
-            "message" => "Doctor creado correctamente",
-            "usuario" => $usuario,
-            "doctor" => $doctor
-        ], 201);
-
-    } catch (\Exception $e) {
-
-        DB::rollBack();
-
-        return response()->json([
-            "message" => "Error",
-            "error" => $e->getMessage()
-        ], 500);
     }
-}
-       // 2. NUEVO INDEX UNIFICADO: Obtener doctores, relaciones y presencia en tiempo real
+
+    /**
+     * Index unificado: doctores + relaciones + presencia en tiempo real.
+     * Antes hacía una consulta a `asistencias` POR CADA doctor (N+1).
+     * Ahora se resuelve con una sola subconsulta vía withExists.
+     */
     public function index()
     {
-        // Traemos los doctores con sus relaciones
-        $doctores = DoctorModel::with(['usuario', 'especialidad'])->get();
+        $doctores = DoctorModel::with(['usuario', 'especialidad'])
+            ->withExists(['asistencias as tiene_asistencia_abierta' => function ($query) {
+                $query->whereNull('hora_salida');
+            }])
+            ->get();
 
-        foreach ($doctores as $doctor) {
-            // Evaluamos si tiene una entrada sin salida registrada en la tabla asistencias
-            $activo = $doctor->asistencias()
-                ->whereNull('hora_salida')
-                ->exists();
-
-            // Seteamos el estado dinámico que leerá React
-            $doctor->estado_asistencia = $activo ? 'dentro' : 'fuera';
-        }
+        $doctores->each(function ($doctor) {
+            $doctor->estado_asistencia = $doctor->tiene_asistencia_abierta ? 'dentro' : 'fuera';
+            unset($doctor->tiene_asistencia_abierta);
+        });
 
         return response()->json($doctores);
     }
 
-    // 3. Actualizar datos del doctor
+    /**
+     * Usado por /doctores-completo (ConfigurarPagoDoctor, AsignarDoctorConsultorio).
+     * Devuelve doctores con su usuario y especialidad ya cargados.
+     */
+    public function listarConUsuario()
+    {
+        $doctores = DoctorModel::with(['usuario', 'especialidad'])->get();
+
+        return response()->json($doctores);
+    }
+
+    /**
+     * Actualizar datos del doctor.
+     * Antes usaba $request->all() sin validar, lo que permitía sobrescribir
+     * cualquier columna (usuario_id, clinica_id, id, etc.) vía mass assignment.
+     */
     public function update(Request $request, $id)
     {
         $doctor = DoctorModel::findOrFail($id);
-        $doctor->update($request->all());
+
+        $validated = $request->validate([
+            'especialidad_id'     => 'nullable|exists:especialidades,id',
+            'cedula_profesional'  => 'sometimes|string|max:30|unique:doctores,cedula_profesional,' . $doctor->id,
+            'anios_exp'           => 'nullable|integer|min:0',
+            'telefono'            => 'nullable|string|max:20',
+        ]);
+
+        $doctor->update($validated);
 
         return response()->json([
-            "message" => "Doctor actualizado",
-            "data" => $doctor
+            'message' => 'Doctor actualizado',
+            'data'    => $doctor,
         ]);
     }
 
-    // 4. Eliminar doctor
+    /**
+     * Eliminar doctor.
+     */
     public function destroy($id)
     {
         $doctor = DoctorModel::findOrFail($id);
         $doctor->delete();
 
         return response()->json([
-            "message" => "Doctor eliminado"
+            'message' => 'Doctor eliminado',
         ]);
     }
 
-    // 5. Catálogo de especialidades para los selects del frontend
+    /**
+     * Catálogo de especialidades para los selects del frontend.
+     */
     public function getEspecialidades()
     {
-        $especialidades = Especialidad::all();
-        return response()->json($especialidades);
+        return response()->json(Especialidad::all());
     }
- 
-
 }

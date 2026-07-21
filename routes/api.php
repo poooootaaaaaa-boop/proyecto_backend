@@ -34,7 +34,9 @@ use App\Http\Controllers\HabitacionController;
 use App\Http\Controllers\InstrumentoMedicoController;
 use App\Http\Controllers\ConsultorioInstrumentoController;
 use App\Http\Controllers\OrdenCompraController;
-
+use App\Http\Controllers\FormatoConsentimientoController;
+use App\Http\Controllers\ConsentimientoController;
+use App\Http\Controllers\ExpedienteArchivoController;
 /*NUEVO*/
 
 
@@ -261,3 +263,40 @@ Route::post('/ordenes-compra', [OrdenCompraController::class, 'addOrdenCompra'])
 Route::get('/ordenes-compra', [OrdenCompraController::class, 'getOrdenesCompra']);
 Route::get('/ordenes-compra/{id}', [OrdenCompraController::class, 'getOrdenCompra']);
 Route::delete('/ordenes-compra/{id}', [OrdenCompraController::class, 'deleteOrdenCompra']);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//-------------------------------------------nuevo-------------------------------------------------
+  Route::get('/formatos-consentimiento', [FormatoConsentimientoController::class, 'index']);
+    Route::get('/formatos-consentimiento/activos', [FormatoConsentimientoController::class, 'activos']);
+    Route::post('/formatos-consentimiento', [FormatoConsentimientoController::class, 'store']);
+    Route::get('/formatos-consentimiento/{id}', [FormatoConsentimientoController::class, 'show']);
+    Route::put('/formatos-consentimiento/{id}', [FormatoConsentimientoController::class, 'update']);
+    Route::patch('/formatos-consentimiento/{id}/estado', [FormatoConsentimientoController::class, 'cambiarEstado']);
+    Route::delete('/formatos-consentimiento/{id}', [FormatoConsentimientoController::class, 'destroy']);
+ 
+    // ---- Consentimientos ----
+    Route::get('/consentimientos', [ConsentimientoController::class, 'index']);
+    Route::post('/consentimientos', [ConsentimientoController::class, 'store']);
+    Route::get('/consentimientos/{id}', [ConsentimientoController::class, 'show']);
+    Route::post('/consentimientos/{id}/firma', [ConsentimientoController::class, 'guardarFirma']);
+    Route::get('/consentimientos/{id}/historial', [ConsentimientoController::class, 'historial']);
+
+
+    Route::get('/expediente-archivos/paciente/{id}', [ExpedienteArchivoController::class, 'porPaciente']);
+Route::post('/expediente-archivos', [ExpedienteArchivoController::class, 'store']);
+Route::delete('/expediente-archivos/{id}', [ExpedienteArchivoController::class, 'destroy']);
