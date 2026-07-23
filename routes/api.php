@@ -34,7 +34,7 @@ use App\Http\Controllers\HabitacionController;
 use App\Http\Controllers\InstrumentoMedicoController;
 use App\Http\Controllers\ConsultorioInstrumentoController;
 use App\Http\Controllers\OrdenCompraController;
-
+use App\Http\Controllers\ReporteHabitacionController;
 /*NUEVO*/
 
 
@@ -261,3 +261,7 @@ Route::post('/ordenes-compra', [OrdenCompraController::class, 'addOrdenCompra'])
 Route::get('/ordenes-compra', [OrdenCompraController::class, 'getOrdenesCompra']);
 Route::get('/ordenes-compra/{id}', [OrdenCompraController::class, 'getOrdenCompra']);
 Route::delete('/ordenes-compra/{id}', [OrdenCompraController::class, 'deleteOrdenCompra']);
+
+
+
+Route::post('/reporte-habitacion', [ReporteHabitacionController::class, 'postApiAddRegistro']);
