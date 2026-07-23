@@ -65,13 +65,11 @@ public function getApiConsulta() {
 
 public function getByPaciente($pacienteId)
 {
-    $consultas = Consulta::where('pacienteId', $pacienteId)
+    $consultas = Consulta::where('paciente_id', $pacienteId)
         ->orderBy('created_at', 'desc')
         ->get();
 
-    return response()->json([
-        'consultas' => $consultas
-    ]);
+    return response()->json($consultas);
 }
 
 public function finalizarConsulta(Request $request)

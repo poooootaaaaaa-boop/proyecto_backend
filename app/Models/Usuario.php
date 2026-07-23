@@ -75,4 +75,14 @@ public function farmacia()
     {
         return $this->hasMany(HistorialPago::class, 'usuario_id');
     }
+
+
+public function historialConsentimientos()
+{
+    return $this->hasMany(
+        ConsentimientoHistorial::class,
+        'usuario_id'
+    );
+}
+
 }

@@ -44,4 +44,13 @@ class Consulta extends Model
     public function receta() {
     return $this->hasOne(Receta::class, 'consulta_id');
 }
+
+public function consentimientos()
+{
+    return $this->hasMany(
+        Consentimiento::class,
+        'consulta_id'
+    );
+}
+
 }
