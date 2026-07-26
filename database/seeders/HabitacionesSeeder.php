@@ -14,7 +14,7 @@ class HabitacionesSeeder extends Seeder
     public function run(): void
     {
         DB::table('habitaciones')->insert([
-    ['id' => 1, 'clinica_id' => 11, 'numero' => '1', 'piso' => '1', 'tipo' => 'Compartida', 'estado' => 'Disponible', 'descripcion' => '11111111', 'created_at' => '2026-06-21 04:40:28', 'updated_at' => '2026-06-21 04:40:28'],
+    ['id' => 1, 'clinica_id' => 6, 'numero' => '1', 'piso' => '1', 'tipo' => 'Compartida', 'estado' => 'Disponible', 'descripcion' => '11111111', 'created_at' => '2026-06-21 04:40:28', 'updated_at' => '2026-06-21 04:40:28'],
 ]);
 
     }
