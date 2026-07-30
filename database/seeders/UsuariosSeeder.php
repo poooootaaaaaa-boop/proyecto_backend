@@ -173,5 +173,7 @@ class UsuariosSeeder extends Seeder
     ['id' => 157, 'rol_id' => 4, 'nombre' => 'salus', 'correo' => 'pooootaaaaaa@gmail.com', 'telefono' => '9992223456', 'foto_url' => null, 'password' => '$2y$12$usw3ZZhg1mYsvY7w7GUlVeIXIM0tNTEXSpgRXP62Q9Rc0H3djo.Ru', 'activo' => 1, 'created_at' => null, 'updated_at' => null, 'estado' => 'activo'],
 ]);
 
+ DB::statement("SELECT setval(pg_get_serial_sequence('usuarios', 'id'), (SELECT MAX(id) FROM usuarios))");
+
     }
 }
