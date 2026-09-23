@@ -33,7 +33,10 @@ class ReporteHabitacionController extends Controller
     $registro->cuarto_id = $data['cuarto_id'];
     $registro->instrumento_id = $data['instrumento_id'];
     $registro->descripcion = $data['descripcion'];
-
+    $registro->fecha_registro = $data['fecha_registro'];
+    $registro->fecha_registro = $data['fecha_registro'];
+    $registro->costo = $data['costo'];
+    $registro->prioridad = $data['prioridad'];
     if ($request->hasFile('foto')) {
         $registro->foto = $ruta_archivo_original;
     }

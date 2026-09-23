@@ -37,6 +37,8 @@ use App\Http\Controllers\OrdenCompraController;
 use App\Http\Controllers\FormatoConsentimientoController;
 use App\Http\Controllers\ConsentimientoController;
 use App\Http\Controllers\ExpedienteArchivoController;
+use App\Http\Controllers\ReporteHabitacionController;
+
 /*NUEVO*/
 
 
@@ -300,3 +302,7 @@ Route::delete('/ordenes-compra/{id}', [OrdenCompraController::class, 'deleteOrde
     Route::get('/expediente-archivos/paciente/{id}', [ExpedienteArchivoController::class, 'porPaciente']);
 Route::post('/expediente-archivos', [ExpedienteArchivoController::class, 'store']);
 Route::delete('/expediente-archivos/{id}', [ExpedienteArchivoController::class, 'destroy']);
+
+
+
+Route::post('/reporte-habitacion', [ReporteHabitacionController::class, 'postApiAddRegistro']);
