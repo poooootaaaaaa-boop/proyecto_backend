@@ -37,7 +37,111 @@ use App\Http\Controllers\OrdenCompraController;
 use App\Http\Controllers\FormatoConsentimientoController;
 use App\Http\Controllers\ConsentimientoController;
 use App\Http\Controllers\ExpedienteArchivoController;
+use App\Http\Controllers\FirmaRegistradaController;
+use App\Http\Controllers\HospitalizacionController;
+
 /*NUEVO*/
+Route::get('/hospitalizaciones/activas', [HospitalizacionController::class, 'activas']);
+Route::post('/hospitalizaciones', [HospitalizacionController::class, 'ingresar']);
+Route::post('/hospitalizaciones/{ocupacion}/alta', [HospitalizacionController::class, 'darDeAlta']);
+Route::get('/hospitalizaciones/paciente/{paciente}/historial', [HospitalizacionController::class, 'historialPaciente']);
+Route::get('/hospitalizaciones/reporte', [HospitalizacionController::class, 'reporte']);
+Route::get('/habitaciones/disponibles', [HospitalizacionController::class, 'habitacionesDisponibles']);
+Route::patch('/habitaciones/{habitacion}/estado', [HospitalizacionController::class, 'actualizarEstadoHabitacion']); // nuevo: control manual de limpieza/mantenimiento
+Route::get('/consentimientos',[ConsentimientoController::class, 'index']);
+
+Route::post(
+    '/consentimientos',
+    [ConsentimientoController::class, 'store']
+);
+
+Route::get(
+    '/consentimientos/{id}',
+    [ConsentimientoController::class, 'show']
+);
+
+Route::get(
+    '/consentimientos/{id}/historial',
+    [ConsentimientoController::class, 'historial']
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Firmas de consentimiento
+|--------------------------------------------------------------------------
+*/
+
+Route::post(
+    '/consentimientos/{id}/firma',
+    [ConsentimientoController::class, 'guardarFirma']
+);
+
+Route::get(
+    '/consentimientos/{id}/firmas/{tipo}/imagen',
+    [ConsentimientoController::class, 'firmaImagen']
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| PDF
+|--------------------------------------------------------------------------
+*/
+
+Route::get(
+    '/consentimientos/{id}/pdf',
+    [ConsentimientoController::class, 'pdf']
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Adjuntos
+|--------------------------------------------------------------------------
+*/
+
+Route::post(
+    '/consentimientos/{id}/adjuntos',
+    [ConsentimientoController::class, 'subirAdjunto']
+);
+
+Route::get(
+    '/consentimientos/adjuntos/{adjuntoId}',
+    [ConsentimientoController::class, 'descargarAdjunto']
+);
+
+Route::delete(
+    '/consentimientos/adjuntos/{adjuntoId}',
+    [ConsentimientoController::class, 'eliminarAdjunto']
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Firmas registradas
+|--------------------------------------------------------------------------
+*/
+
+Route::get(
+    '/firmas-registradas',
+    [FirmaRegistradaController::class, 'index']
+);
+
+Route::post(
+    '/firmas-registradas',
+    [FirmaRegistradaController::class, 'store']
+);
+
+Route::get(
+    '/firmas-registradas/{tipo}/{referenciaId}/imagen',
+    [FirmaRegistradaController::class, 'imagen']
+);
+
+Route::delete(
+    '/firmas-registradas/{tipo}/{referenciaId}',
+    [FirmaRegistradaController::class, 'destroy']
+);
 
 
 Route::apiResource(
