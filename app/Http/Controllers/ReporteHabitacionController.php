@@ -31,6 +31,7 @@ class ReporteHabitacionController extends Controller
     // Cambia esto si en tu BD se llama diferente:
     //$registro->habitacion_id = $data['cuarto_id'];
     $registro->cuarto_id = $data['cuarto_id'];
+    $registro->doctor_id = $data['doctor_id'];
     $registro->instrumento_id = $data['instrumento_id'];
     $registro->descripcion = $data['descripcion'];
     $registro->fecha_registro = $data['fecha_registro'];

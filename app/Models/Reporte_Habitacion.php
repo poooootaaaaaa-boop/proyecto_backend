@@ -12,6 +12,7 @@ class Reporte_Habitacion extends Model
     // Definimos los campos que se pueden llenar de forma masiva
     protected $fillable = [
         'cuarto_id',
+        'doctor_id',
         'instrumento_id',
         'descripcion',
         'foto',
