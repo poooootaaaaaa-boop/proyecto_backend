@@ -38,6 +38,11 @@ use App\Http\Controllers\FormatoConsentimientoController;
 use App\Http\Controllers\ConsentimientoController;
 use App\Http\Controllers\ExpedienteArchivoController;
 use App\Http\Controllers\ReporteHabitacionController;
+use App\Http\Controllers\ControlAlimentoController;
+
+
+
+Route::post('/control-alimentos',[ControlAlimentoController::class,'postApiAddControlAlimento']);
 
 /*NUEVO*/
 
