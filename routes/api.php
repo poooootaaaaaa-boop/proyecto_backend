@@ -43,6 +43,14 @@ use App\Http\Controllers\ReporteHabitacionController;
 use App\Http\Controllers\ControlAlimentoController;
 
 
+
+
+
+Route::post('/hospitalizaciones/{ocupacion}/traslado', [HospitalizacionController::class, 'trasladar']);
+Route::get('/hospitalizaciones/{ocupacion}/traslados', [HospitalizacionController::class, 'historialTraslados']);
+Route::get('/consentimientos', [HospitalizacionController::class, 'listarDocumentos']);
+Route::post('/consentimientos/{consentimiento}/finalizar', [HospitalizacionController::class, 'finalizarConsentimiento']);
+Route::get('/consentimientos', [HospitalizacionController::class, 'listarDocumentos']);
 Route::post('/control-alimentos',[ControlAlimentoController::class,'postApiAddControlAlimento']);
 
 /*NUEVO*/

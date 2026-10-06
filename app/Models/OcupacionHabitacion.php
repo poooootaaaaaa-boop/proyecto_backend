@@ -16,14 +16,25 @@ class OcupacionHabitacion extends Model
         'fecha_ingreso',
         'fecha_salida',
         'estado',
-        'motivo',       // <-- agregado
-        'diagnostico',  // <-- agregado
-        'notas_alta',   // <-- agregado
+        'motivo',
+        'diagnostico',
+        'notas_alta',
+        // Checklist de cierre de estancia
+        'fecha_alta_medica',
+        'doctor_alta_id',
+        'diagnostico_egreso',
+        'tratamiento_egreso',
+        'medicamentos_egreso',
+        'recomendaciones',
+        'proxima_consulta',
+        'condicion_egreso',
     ];
 
     protected $casts = [
-        'fecha_ingreso' => 'datetime',
-        'fecha_salida' => 'datetime',
+        'fecha_ingreso'     => 'datetime',
+        'fecha_salida'      => 'datetime',
+        'fecha_alta_medica' => 'datetime',
+        'proxima_consulta'  => 'date',
     ];
 
     public function habitacion()
@@ -36,7 +47,11 @@ class OcupacionHabitacion extends Model
         return $this->belongsTo(Paciente::class, 'paciente_id');
     }
 
-    // <-- agregado: esto es lo que causaba el BadMethodCallException
+    public function doctorAlta()
+    {
+        return $this->belongsTo(Doctor::class, 'doctor_alta_id');
+    }
+
     public function scopeActivas($query)
     {
         return $query->where('estado', 'Activa');
