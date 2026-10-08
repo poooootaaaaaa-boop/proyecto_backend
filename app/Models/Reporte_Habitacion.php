@@ -19,5 +19,6 @@ class Reporte_Habitacion extends Model
         'fecha_registro',
         'costo',
         'prioridad'
+        //'status'
     ];
 }

@@ -38,6 +38,7 @@ class ReporteHabitacionController extends Controller
     $registro->fecha_registro = $data['fecha_registro'];
     $registro->costo = $data['costo'];
     $registro->prioridad = $data['prioridad'];
+    //$registro->status = 'pendiente';
     if ($request->hasFile('foto')) {
         $registro->foto = $ruta_archivo_original;
     }
