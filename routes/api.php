@@ -4,7 +4,7 @@ use App\Models\User;
 use App\Models\Usuario;
 use App\Models\HistorialPago;
 use Illuminate\Support\Facades\Hash;
-
+use App\Http\Controllers\MetabaseController; // <-- 1. IMPORTA EL CONTROLADOR AQUÍ
 
 use App\Http\Controllers\DoctorController;
 use Illuminate\Http\Request;
@@ -45,7 +45,7 @@ use App\Http\Controllers\ControlAlimentoController;
 
 
 
-
+Route::get('/metabase-token', [MetabaseController::class, 'getToken']);
 Route::post('/hospitalizaciones/{ocupacion}/traslado', [HospitalizacionController::class, 'trasladar']);
 Route::get('/hospitalizaciones/{ocupacion}/traslados', [HospitalizacionController::class, 'historialTraslados']);
 Route::get('/consentimientos', [HospitalizacionController::class, 'listarDocumentos']);
