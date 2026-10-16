@@ -15,5 +15,8 @@ class Reporte_Habitacion extends Model
         'instrumento_id',
         'descripcion',
         'foto',
+        'fecha_registro',
+        'costo',
+        'prioridad'
     ];
 }

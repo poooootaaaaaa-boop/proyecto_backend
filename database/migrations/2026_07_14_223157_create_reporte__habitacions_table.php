@@ -29,6 +29,9 @@ return new class extends Migration
             
             $table->text('descripcion');
             $table->string('foto')->nullable(); // Guarda la ruta/nombre de la imagen
+            $table->decimal('costo', 10, 2)->nullable();
+            $table->enum('prioridad', ['alta', 'media', 'baja'])->default('media');
+            $table->date('fecha_registro');
             
             $table->timestamps();
         });
