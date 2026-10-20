@@ -25,6 +25,7 @@ class DoctorController extends Controller
             // clinica_id ya no se hardcodea a 1: se toma del usuario autenticado
             // o se recibe explícito si el flujo lo requiere (ej. superadmin creando en otra clínica).
             'clinica_id'           => 'nullable|integer|exists:clinicas,id',
+            'face_embedding'       => 'nullable|json',
         ]);
 
         DB::beginTransaction();
@@ -38,6 +39,7 @@ class DoctorController extends Controller
                 'telefono'  => $request->telefono,
                 'password'  => Hash::make($request->password),
                 'foto_url'  => null,
+                'face_embedding'  => $request->input('face_embedding'),
             ]);
 
             // 2. Subir foto (si existe)

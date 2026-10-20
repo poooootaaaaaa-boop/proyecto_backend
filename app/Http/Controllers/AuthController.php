@@ -28,6 +28,9 @@ $request->validate([
     'rol_id' => 'required|exists:roles,id',
     'foto' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
 
+        // rostro
+    'face_embedding' => 'nullable|json',
+
     // extras
     'nombre_clinica' => 'nullable|string|max:150',
     'direccion' => 'nullable|string',
@@ -52,7 +55,8 @@ $request->validate([
                 'telefono' => $request->telefono,
                 'password' => Hash::make($request->password),
                 'rol_id' => $request->rol_id,
-                'activo' => true
+                'activo' => true,
+                'face_embedding' => $request->face_embedding,
             ]);
 
             //  ROLES
@@ -194,6 +198,174 @@ if ($request->rol_id == 3) {
     'token' => $token
 ]);
     }
+
+
+
+
+
+
+
+
+
+public function loginRostro(Request $request)
+{
+    $request->validate([
+        'face_embedding' => 'required|json',
+    ]);
+
+    $embeddingRecibido = json_decode(
+        $request->face_embedding,
+        true
+    );
+
+    if (!is_array($embeddingRecibido) || count($embeddingRecibido) !== 1024) {
+        return response()->json([
+            'mensaje' => 'Embedding facial inválido'
+        ], 422);
+    }
+
+    $usuarios = Usuario::with([
+        'paciente',
+        'doctor',
+        'clinica',
+        'farmacia',
+        'rol'
+    ])
+    ->where('activo', true)
+    ->whereNotNull('face_embedding')
+    ->get();
+
+    $mejorUsuario = null;
+    $mejorSimilitud = 0;
+
+    foreach ($usuarios as $usuario) {
+
+        $embeddingGuardado = json_decode(
+            $usuario->face_embedding,
+            true
+        );
+
+        if (!is_array($embeddingGuardado)) {
+            continue;
+        }
+
+        if (count($embeddingGuardado) !== 1024) {
+            continue;
+        }
+
+        $similitud = $this->calcularSimilitud(
+            $embeddingRecibido,
+            $embeddingGuardado
+        );
+
+        if ($similitud > $mejorSimilitud) {
+            $mejorSimilitud = $similitud;
+            $mejorUsuario = $usuario;
+        }
+    }
+
+    // Umbral inicial
+    $umbral = 0.70;
+
+    if (!$mejorUsuario || $mejorSimilitud < $umbral) {
+        return response()->json([
+            'mensaje' => 'Rostro no reconocido',
+            'similitud' => $mejorSimilitud
+        ], 401);
+    }
+
+    // Eliminar tokens anteriores
+    $mejorUsuario->tokens()->delete();
+
+    // Crear nuevo token
+    $token = $mejorUsuario
+        ->createToken('token')
+        ->plainTextToken;
+
+    return response()->json([
+        'mensaje' => 'Login facial exitoso',
+        'similitud' => $mejorSimilitud,
+        'usuario' => [
+            'id' => $mejorUsuario->id,
+            'nombre' => $mejorUsuario->nombre,
+            'correo' => $mejorUsuario->correo,
+            'foto_url' => $mejorUsuario->foto_url,
+            'rol' => $mejorUsuario->rol->nombre,
+            'paciente_id' => $mejorUsuario->paciente?->id,
+            'doctor_id' => $mejorUsuario->doctor?->id,
+            'clinica_id' => $mejorUsuario->clinica?->id,
+            'farmacia_id' => $mejorUsuario->farmacia?->id,
+        ],
+        'token' => $token
+    ]);
+}
+
+
+
+
+private function calcularSimilitud(array $a, array $b): float
+{
+    $producto = 0;
+    $normaA = 0;
+    $normaB = 0;
+
+    for ($i = 0; $i < count($a); $i++) {
+
+        $producto += $a[$i] * $b[$i];
+
+        $normaA += $a[$i] * $a[$i];
+
+        $normaB += $b[$i] * $b[$i];
+    }
+
+    if ($normaA == 0 || $normaB == 0) {
+        return 0;
+    }
+
+    return $producto / (
+        sqrt($normaA) * sqrt($normaB)
+    );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     // AUTOLOGIN (Sanctum)
