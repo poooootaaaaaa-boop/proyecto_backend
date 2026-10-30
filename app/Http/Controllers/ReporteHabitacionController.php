@@ -7,6 +7,12 @@ use App\Models\Reporte_Habitacion;
 
 class ReporteHabitacionController extends Controller
 {
+    public function postApiGetRegistros()
+{
+    return response()->json(
+        Reporte_Habitacion::all()
+    );
+}
     public function postApiAddRegistro(Request $request) {
     // Obtenemos los parámetros de la petición
     $data = $request->all();
@@ -38,7 +44,7 @@ class ReporteHabitacionController extends Controller
     $registro->fecha_registro = $data['fecha_registro'];
     $registro->costo = $data['costo'];
     $registro->prioridad = $data['prioridad'];
-    //$registro->status = 'pendiente';
+    $registro->status = 'pendiente';
     if ($request->hasFile('foto')) {
         $registro->foto = $ruta_archivo_original;
     }
@@ -52,4 +58,23 @@ class ReporteHabitacionController extends Controller
         'registro' => $registro
     ], 200);
 }
+
+
+public function actualizarStatus(Request $request, $id)
+{
+    $request->validate([
+        'status' => 'required|in:aprobado',
+    ]);
+
+    $registro = Reporte_Habitacion::findOrFail($id);
+
+    $registro->status = 'aprobado';
+    $registro->save();
+
+    return response()->json([
+        'mensaje' => 'Reporte aprobado correctamente',
+        'registro' => $registro
+    ]);
+}
+
 }
