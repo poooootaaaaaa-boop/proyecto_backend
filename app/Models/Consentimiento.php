@@ -11,23 +11,25 @@ class Consentimiento extends Model
 
     protected $table = 'consentimientos';
 
-    protected $fillable = [
-        'paciente_id',
-        'doctor_id',
-        'formato_id',
-        'consulta_id',
-        'titulo',
-        'contenido',
-        'firma',
-        'pdf',
-        'estado',
-        'fecha_firma',
-        'observaciones'
-    ];
+protected $fillable = [
+    'paciente_id',
+    'doctor_id',
+    'formato_id',
+    'consulta_id',
+    'titulo',
+    'contenido',
+    'firma',
+    'pdf',
+    'estado',
+    'fecha_firma',
+    'fecha_finalizado',
+    'observaciones'
+];
 
-    protected $casts = [
-        'fecha_firma' => 'datetime'
-    ];
+protected $casts = [
+    'fecha_firma'      => 'datetime',
+    'fecha_finalizado' => 'datetime',
+];
 
     public function paciente()
     {
