@@ -15,6 +15,7 @@ class OcupacionHabitacion extends Model
         'paciente_id',
         'fecha_ingreso',
         'fecha_salida',
+        'dias_estimados',
         'estado',
         'motivo',
         'diagnostico',
@@ -28,6 +29,7 @@ class OcupacionHabitacion extends Model
         'recomendaciones',
         'proxima_consulta',
         'condicion_egreso',
+        'receta_id',
     ];
 
     protected $casts = [
@@ -50,6 +52,21 @@ class OcupacionHabitacion extends Model
     public function doctorAlta()
     {
         return $this->belongsTo(Doctor::class, 'doctor_alta_id');
+    }
+
+    public function receta()
+    {
+        return $this->belongsTo(Receta::class, 'receta_id');
+    }
+
+    public function registrosEstancia()
+    {
+        return $this->hasMany(EstanciaRegistro::class, 'ocupacion_id')->orderBy('fecha_hora');
+    }
+
+    public function consumosEstancia()
+    {
+        return $this->hasMany(EstanciaConsumo::class, 'ocupacion_id')->orderBy('fecha_hora');
     }
 
     public function scopeActivas($query)
