@@ -15,7 +15,8 @@ public function addPaciente(Request $request)
     $request->validate([
         'nombre' => 'required',
         'apellidoP' => 'required',
-        'correo' => 'required|email|unique:usuarios,correo'
+        'correo' => 'required|email|unique:usuarios,correo',
+        'face_embedding' => 'nullable|json',
     ]);
 
     // contraseña automática
@@ -27,7 +28,9 @@ public function addPaciente(Request $request)
         'correo' => $request->correo,
         'telefono' => $request->telefono,
         'password' => Hash::make($passwordPlano),
-        'rol_id' => 2 //  2 = PACIENTE
+        'rol_id' => 2,//  2 = PACIENTE
+            // Guardar el embedding facial
+        'face_embedding' => $request->face_embedding,
     ]);
 
     //  CREAR PACIENTE
