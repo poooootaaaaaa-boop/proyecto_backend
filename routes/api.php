@@ -337,8 +337,14 @@ Route::delete('/doctores/{id}',[DoctorController::class,'destroy']);
 //->middleware('check.suscripcion');
 
 Route::post('/AddPlanes', [PlanesController::class, 'AddPlanes']);
-Route::get('/Getplanes', [PlanesController::class, 'GetPlanes']);
 
+
+
+// Ruta para cargar las cards de los planes en React
+Route::get('/Getplanes', [PlanesController::class, 'getPlanes']);
+
+// Ruta para procesar el pago al hacer clic en contratar
+Route::post('/pago', [PlanesController::class, 'pagar']);
 Route::post('/add-suscripcion', [SuscripcionController::class, 'AddSuscripcion']);
 
 /*
