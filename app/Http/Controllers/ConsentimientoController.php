@@ -45,11 +45,15 @@ class ConsentimientoController extends Controller
     public function index(Request $request)
     {
         $query = Consentimiento::with([
-            'paciente',
-            'doctor',
+            'paciente.usuario',
+            'doctor.usuario',
             'formato',
             'consulta'
         ])->orderBy('created_at', 'desc');
+
+        if ($request->filled('tipo_documento') && $request->tipo_documento !== 'Consentimiento') {
+            return response()->json(['success' => true, 'data' => []], 200);
+        }
 
         if ($request->filled('paciente_id')) {
             $query->where('paciente_id', $request->paciente_id);
@@ -63,7 +67,35 @@ class ConsentimientoController extends Controller
             $query->where('estado', $request->estado);
         }
 
-        $consentimientos = $query->get();
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+            $query->whereHas('paciente.usuario', fn ($q) => $q->where('nombre', 'like', "%{$buscar}%"));
+        }
+
+        if ($request->filled('nombre')) {
+            $nombre = $request->nombre;
+            $query->where(function ($q) use ($nombre) {
+                $q->where('titulo', 'like', "%{$nombre}%")
+                    ->orWhereHas('formato', fn ($formato) => $formato->where('nombre', 'like', "%{$nombre}%"));
+            });
+        }
+
+        if ($request->filled('desde')) {
+            $query->whereDate('created_at', '>=', $request->desde);
+        }
+
+        if ($request->filled('hasta')) {
+            $query->whereDate('created_at', '<=', $request->hasta);
+        }
+
+        $consentimientos = $query->get()->map(function ($consentimiento) {
+            $data = $consentimiento->toArray();
+            $data['tipo_documento'] = 'Consentimiento';
+            $data['nombre_documento'] = $consentimiento->titulo ?: $consentimiento->formato?->nombre;
+            $data['pdf_url'] = url('/api/consentimientos/' . $consentimiento->id . '/pdf');
+            $data['download_url'] = url('/api/consentimientos/' . $consentimiento->id . '/pdf?download=1');
+            return $data;
+        });
 
         return response()->json([
             'success' => true,
@@ -374,6 +406,9 @@ class ConsentimientoController extends Controller
         'paciente_id' => $request->paciente_id,
         'fecha_ingreso' =>
             $hosp['fecha_ingreso'] ?? $now,
+        'motivo' => $hosp['motivo'] ?? null,
+        'diagnostico' => $hosp['diagnostico'] ?? null,
+        'dias_estimados' => $hosp['dias_estimados'] ?? null,
         'estado' => 'Activa',
     ]);
 
@@ -386,6 +421,24 @@ class ConsentimientoController extends Controller
             'estado' => 'Ocupada',
             'updated_at' => $now
         ]);
+
+        $this->guardarDocumentoIngreso(
+            $ocupacionId,
+            (int) $request->paciente_id,
+            (int) $request->doctor_id,
+            $habitacion,
+            $pacienteData,
+            $doctorData,
+            $clinica,
+            [
+                'Fecha y hora de ingreso' => $hosp['fecha_ingreso'] ?? $now->format('Y-m-d H:i:s'),
+                'Tipo de hospitalización' => self::TIPOS_HOSPITALIZACION[$hosp['tipo']] ?? $hosp['tipo'],
+                'Prioridad' => $hosp['prioridad'] ?? 'Programada',
+                'Estancia estimada' => !empty($hosp['dias_estimados']) ? $hosp['dias_estimados'] . ' días' : '—',
+                'Diagnóstico' => $hosp['diagnostico'] ?? '—',
+                'Motivo' => $hosp['motivo'] ?? '—',
+            ]
+        );
 }
 
                     /*
@@ -467,6 +520,8 @@ class ConsentimientoController extends Controller
                 return $consentimiento->id;
             });
 
+            $this->generarPDF($id);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Consentimiento creado correctamente.',
@@ -480,6 +535,49 @@ class ConsentimientoController extends Controller
                 'message' => $e->getMessage()
             ], 422);
         }
+    }
+
+    private function guardarDocumentoIngreso(
+        int $ocupacionId,
+        int $pacienteId,
+        int $doctorId,
+        object $habitacion,
+        object $pacienteData,
+        object $doctorData,
+        ?object $clinica,
+        array $datos
+    ): void {
+        $paciente = (object) [
+            'usuario' => (object) ['nombre' => $pacienteData->nombre ?? '—'],
+        ];
+        $doctor = (object) [
+            'usuario' => (object) ['nombre' => $doctorData->nombre ?? '—'],
+        ];
+        $nombre = 'Ingreso hospitalario - ' . $ocupacionId;
+        $binario = Pdf::loadView('pdf.hospitalizacion', [
+            'tipo' => 'Ingreso',
+            'nombre' => $nombre,
+            'documentoId' => $ocupacionId,
+            'datos' => $datos,
+            'paciente' => $paciente,
+            'doctor' => $doctor,
+            'clinica' => $clinica,
+            'habitacion' => $habitacion,
+            'firmas' => [],
+        ])->setPaper('letter')->output();
+
+        DB::table('hospitalizacion_documentos')->insert([
+            'ocupacion_id' => $ocupacionId,
+            'habitacion_id' => $habitacion->id,
+            'paciente_id' => $pacienteId,
+            'doctor_id' => $doctorId,
+            'tipo' => 'Ingreso',
+            'nombre' => $nombre,
+            'contenido' => $binario,
+            'mime' => 'application/pdf',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**
