@@ -21,7 +21,7 @@ class StripeController extends Controller
             ], 404);
         }
 
-        Stripe::setApiKey(env('STRIPE_SECRET'));
+        Stripe::setApiKey(config('services.stripe.secret'));
 
         $session = Session::create([
             'payment_method_types' => ['card'],
@@ -129,7 +129,7 @@ class StripeController extends Controller
 
     public function pagar(Request $request)
     {
-        \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
         $plan = Planes::find($request->plan_id);
 
@@ -138,35 +138,24 @@ class StripeController extends Controller
         }
 
         try {
-            \Stripe\Charge::create([
-                "amount" => $plan->precio * 100,
-                "currency" => "mxn",
-                "source" => $request->token_stripe,
-                "description" => "Pago de plan " . $plan->nombre
+            // Creamos el PaymentIntent y devolvemos el clientSecret para que el frontend lo confirme con Elements
+            $paymentIntent = \Stripe\PaymentIntent::create([
+                'amount' => $plan->precio * 100,
+                'currency' => 'mxn',
+                'automatic_payment_methods' => ['enabled' => true],
+                'description' => "Pago de plan " . $plan->nombre,
+                'metadata' => [
+                    'usuario_id' => $request->usuario_id,
+                    'plan_id' => $request->plan_id
+                ]
             ]);
-
-            // 1. Registrar pago exitoso
-            $pagoRequest = new Request([
-                'usuario_id'   => $request->usuario_id,
-                'monto'        => $plan->precio,
-                'metodo_pago'  => 'stripe',
-                'estado_pago'  => 'pagado'
-            ]);
-
-            $pagoController = new PagoController();
-            $pagoController->registrarPago($pagoRequest);
-
-            // 2. Crear/actualizar suscripción
-            $controller = new SuscripcionController();
-            $controller->AddSuscripcion($request);
 
             return response()->json([
-                'status' => 'OK',
-                'mensaje' => 'Pago registrado y suscripción activada'
+                'clientSecret' => $paymentIntent->client_secret
             ]);
 
         } catch (\Exception $e) {
-            // Registrar intento fallido
+            // Registrar intento fallido en caso de error al crear el intent
             $pagoFallido = new Request([
                 'usuario_id'   => $request->usuario_id,
                 'monto'        => $plan->precio,
