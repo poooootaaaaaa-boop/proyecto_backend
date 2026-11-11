@@ -13,7 +13,8 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use App\Models\Rol;
-
+use App\Models\SesionDoctor;
+use App\Http\Controllers\SesionDoctorController;
 class AuthController extends Controller
 {
 
@@ -277,10 +278,16 @@ public function loginRostro(Request $request)
     // Eliminar tokens anteriores
     $mejorUsuario->tokens()->delete();
 
-    // Crear nuevo token
-    $token = $mejorUsuario
-        ->createToken('token')
-        ->plainTextToken;
+
+    $accessToken = $mejorUsuario->createToken('token');
+
+    // Guardar entrada si el usuario es doctor
+    SesionDoctorController::registrarInicio(
+        $mejorUsuario,
+        $accessToken
+    );
+
+    $token = $accessToken->plainTextToken;
 
     return response()->json([
         'mensaje' => 'Login facial exitoso',
@@ -378,14 +385,33 @@ private function calcularSimilitud(array $a, array $b): float
 
 
     // LOGOUT (solo sesión actual)
-    public function logout(Request $request)
-    {
-        $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'mensaje' => 'Sesión cerrada correctamente'
-        ]);
+public function logout(Request $request)
+{
+    $usuario = $request->user();
+    $tokenActual = $usuario->currentAccessToken();
+
+    if ($tokenActual) {
+        // Cerrar el registro de esta sesión facial
+        if ((int) $usuario->rol_id === 3) {
+            SesionDoctor::where('usuario_id', $usuario->id)
+                ->where('token_id', $tokenActual->id)
+                ->whereNull('fin_sesion')
+                ->update([
+                    'fin_sesion' => now(),
+                    'estado' => 'cerrada',
+                ]);
+        }
+
+        // Conservar el cierre de sesión de Sanctum
+        $tokenActual->delete();
     }
+
+    return response()->json([
+        'mensaje' => 'Sesión cerrada correctamente'
+    ]);
+}
+
 
 
     // LOGOUT ALL (opcional PRO)
