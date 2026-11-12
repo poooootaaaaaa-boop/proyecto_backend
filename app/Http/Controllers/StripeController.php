@@ -2,26 +2,39 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Stripe\Stripe;
-use Stripe\Checkout\Session;
 use App\Models\Planes;
-use App\Http\Controllers\SuscripcionController;
-use App\Http\Controllers\PagoController;
+use App\Models\Suscripciones;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Stripe\Checkout\Session;
+use Stripe\Exception\SignatureVerificationException;
+use Stripe\PaymentIntent;
+use Stripe\Stripe;
+use Stripe\Webhook;
+use UnexpectedValueException;
 
 class StripeController extends Controller
 {
+    /**
+     * Checkout hospedado por Stripe. El alta de la suscripción ocurre en el webhook.
+     */
     public function crearSesion(Request $request)
     {
-        $plan = Planes::find($request->plan_id);
+        $datos = $this->validarSolicitudPago($request);
+        $plan = $datos['plan'];
 
-        if (!$plan) {
-            return response()->json([
-                'error' => 'Plan no encontrado'
-            ], 404);
+        if ($rechazo = $this->rechazarSiPlanYaActivo($datos['usuario_id'], $plan->id)) {
+            return $rechazo;
         }
 
-        Stripe::setApiKey(config('services.stripe.secret'));
+        $this->configurarStripe();
+
+        $metadata = [
+            'usuario_id' => (string) $datos['usuario_id'],
+            'plan_id' => (string) $plan->id,
+            'origen' => 'checkout',
+        ];
 
         $session = Session::create([
             'payment_method_types' => ['card'],
@@ -30,146 +43,295 @@ class StripeController extends Controller
                     'currency' => 'mxn',
                     'product_data' => [
                         'name' => $plan->nombre,
-                        'description' => 'Suscripción al plan ' . $plan->nombre . ' con acceso completo'
+                        'description' => 'Suscripción al plan ' . $plan->nombre . ' con acceso completo',
                     ],
-                    'unit_amount' => $plan->precio * 100,
+                    'unit_amount' => $this->montoEnCentavos($plan),
                 ],
                 'quantity' => 1,
             ]],
             'mode' => 'payment',
-
-            // IMPORTANTE: metadata también aquí
             'payment_intent_data' => [
                 'description' => 'Pago de plan ' . $plan->nombre,
-                'metadata' => [
-                    'usuario_id' => $request->usuario_id,
-                    'plan_id' => $request->plan_id
-                ]
+                'metadata' => $metadata,
             ],
-
-            'success_url' => 'http://localhost:3000/success',
-            'cancel_url' => 'http://localhost:3000/cancel',
-
-            // metadata de la sesión
-            'metadata' => [
-                'usuario_id' => $request->usuario_id,
-                'plan_id' => $request->plan_id
-            ]
+            'success_url' => config('services.stripe.success_url'),
+            'cancel_url' => config('services.stripe.cancel_url'),
+            'metadata' => $metadata,
         ]);
 
         return response()->json([
-            'url' => $session->url
+            'url' => $session->url,
         ]);
+    }
+
+    /**
+     * PaymentIntent para Stripe Elements. El alta de la suscripción ocurre en el webhook.
+     */
+    public function pagar(Request $request)
+    {
+        $datos = $this->validarSolicitudPago($request);
+        $plan = $datos['plan'];
+
+        if ($rechazo = $this->rechazarSiPlanYaActivo($datos['usuario_id'], $plan->id)) {
+            return $rechazo;
+        }
+
+        $this->configurarStripe();
+
+        try {
+            $paymentIntent = PaymentIntent::create([
+                'amount' => $this->montoEnCentavos($plan),
+                'currency' => 'mxn',
+                'automatic_payment_methods' => ['enabled' => true],
+                'description' => 'Pago de plan ' . $plan->nombre,
+                'metadata' => [
+                    'usuario_id' => (string) $datos['usuario_id'],
+                    'plan_id' => (string) $plan->id,
+                    'origen' => 'elements',
+                ],
+            ]);
+
+            return response()->json([
+                'clientSecret' => $paymentIntent->client_secret,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('No se pudo crear el PaymentIntent de Stripe', [
+                'usuario_id' => $datos['usuario_id'],
+                'plan_id' => $plan->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $this->registrarPago($datos['usuario_id'], $plan->precio, 'cancelado');
+
+            return response()->json([
+                'error' => 'Pago fallido',
+                'detalle' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function webhook(Request $request)
     {
-        $event = json_decode($request->getContent());
+        $secret = config('services.stripe.webhook_secret');
 
-        // =========================
-        // 1) PAGO EXITOSO
-        // =========================
-        if ($event->type == 'checkout.session.completed') {
-            $session = $event->data->object;
+        if (!$secret) {
+            Log::error('STRIPE_WEBHOOK_SECRET no está configurado');
 
-            $usuarioId = $session->metadata->usuario_id ?? null;
-            $planId = $session->metadata->plan_id ?? null;
-
-            $plan = Planes::find($planId);
-
-            if ($usuarioId && $plan) {
-                // Registrar pago exitoso
-                $pagoRequest = new Request([
-                    'usuario_id'   => $usuarioId,
-                    'monto'        => $plan->precio,
-                    'metodo_pago'  => 'stripe',
-                    'estado_pago'  => 'pagado'
-                ]);
-
-                $pagoController = new PagoController();
-                $pagoController->registrarPago($pagoRequest);
-
-                // Crear/actualizar suscripción
-                $suscripcionRequest = new Request([
-                    'usuario_id' => $usuarioId,
-                    'plan_id'    => $planId
-                ]);
-
-                $suscripcionController = new SuscripcionController();
-                $suscripcionController->AddSuscripcion($suscripcionRequest);
-            }
+            return response()->json(['error' => 'Webhook no configurado'], 500);
         }
 
-        // =========================
-        // 2) PAGO FALLIDO
-        // =========================
-        if ($event->type == 'payment_intent.payment_failed') {
-            $paymentIntent = $event->data->object;
+        $firma = $request->header('Stripe-Signature');
 
-            $usuarioId = $paymentIntent->metadata->usuario_id ?? null;
-            $planId = $paymentIntent->metadata->plan_id ?? null;
+        if (!$firma) {
+            return response()->json(['error' => 'Firma ausente'], 400);
+        }
 
-            $plan = Planes::find($planId);
+        try {
+            $event = Webhook::constructEvent(
+                $request->getContent(),
+                $firma,
+                $secret
+            );
+        } catch (UnexpectedValueException $e) {
+            return response()->json(['error' => 'Payload inválido'], 400);
+        } catch (SignatureVerificationException $e) {
+            Log::warning('Firma de webhook de Stripe rechazada', [
+                'error' => $e->getMessage(),
+            ]);
 
-            if ($usuarioId && $plan) {
-                $pagoRequest = new Request([
-                    'usuario_id'   => $usuarioId,
-                    'monto'        => $plan->precio,
-                    'metodo_pago'  => 'stripe',
-                    'estado_pago'  => 'cancelado'
-                ]);
+            return response()->json(['error' => 'Firma inválida'], 400);
+        }
 
-                $pagoController = new PagoController();
-                $pagoController->registrarPago($pagoRequest);
+        $claveEvento = 'stripe_event_' . $event->id;
+
+        try {
+            if (Cache::has($claveEvento)) {
+                return response()->json(['ok' => true]);
             }
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo consultar la idempotencia del webhook de Stripe', [
+                'event_id' => $event->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        try {
+            match ($event->type) {
+                'checkout.session.completed' => $this->procesarCheckoutCompletado($event->data->object),
+                'payment_intent.succeeded' => $this->procesarPaymentIntentExitoso($event->data->object),
+                'payment_intent.payment_failed' => $this->procesarPagoFallido($event->data->object),
+                default => null,
+            };
+        } catch (\Throwable $e) {
+            Log::error('Error al procesar el webhook de Stripe', [
+                'event_id' => $event->id,
+                'type' => $event->type,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['error' => 'Error al procesar el evento'], 500);
+        }
+
+        try {
+            Cache::put($claveEvento, true, now()->addDays(3));
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo guardar la idempotencia del webhook de Stripe', [
+                'event_id' => $event->id,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return response()->json(['ok' => true]);
     }
 
-    public function pagar(Request $request)
+    private function procesarCheckoutCompletado(object $session): void
     {
-        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
-
-        $plan = Planes::find($request->plan_id);
-
-        if (!$plan) {
-            return response()->json(['error' => 'Plan no existe'], 404);
+        if (($session->payment_status ?? null) !== 'paid') {
+            return;
         }
 
-        try {
-            // Creamos el PaymentIntent y devolvemos el clientSecret para que el frontend lo confirme con Elements
-            $paymentIntent = \Stripe\PaymentIntent::create([
-                'amount' => $plan->precio * 100,
-                'currency' => 'mxn',
-                'automatic_payment_methods' => ['enabled' => true],
-                'description' => "Pago de plan " . $plan->nombre,
-                'metadata' => [
-                    'usuario_id' => $request->usuario_id,
-                    'plan_id' => $request->plan_id
-                ]
-            ]);
+        $this->confirmarPagoYSuscripcion($session->metadata ?? null);
+    }
 
-            return response()->json([
-                'clientSecret' => $paymentIntent->client_secret
-            ]);
+    private function procesarPaymentIntentExitoso(object $paymentIntent): void
+    {
+        $metadata = $paymentIntent->metadata ?? null;
 
-        } catch (\Exception $e) {
-            // Registrar intento fallido en caso de error al crear el intent
-            $pagoFallido = new Request([
-                'usuario_id'   => $request->usuario_id,
-                'monto'        => $plan->precio,
-                'metodo_pago'  => 'stripe',
-                'estado_pago'  => 'cancelado'
-            ]);
-
-            $pagoController = new PagoController();
-            $pagoController->registrarPago($pagoFallido);
-
-            return response()->json([
-                'error' => 'Pago fallido',
-                'detalle' => $e->getMessage()
-            ], 500);
+        // Checkout también emite payment_intent.succeeded. Ese caso ya se
+        // confirma en checkout.session.completed para no duplicar el cobro.
+        if ($this->metadata($metadata, 'origen') !== 'elements') {
+            return;
         }
+
+        $this->confirmarPagoYSuscripcion($metadata);
+    }
+
+    private function procesarPagoFallido(object $paymentIntent): void
+    {
+        $usuarioId = $this->metadata($paymentIntent->metadata ?? null, 'usuario_id');
+        $planId = $this->metadata($paymentIntent->metadata ?? null, 'plan_id');
+        $plan = $planId ? Planes::find($planId) : null;
+
+        if (!$usuarioId || !$plan) {
+            return;
+        }
+
+        $this->registrarPago($usuarioId, $plan->precio, 'cancelado');
+    }
+
+    private function confirmarPagoYSuscripcion(mixed $metadata): void
+    {
+        $usuarioId = $this->metadata($metadata, 'usuario_id');
+        $planId = $this->metadata($metadata, 'plan_id');
+        $plan = $planId ? Planes::find($planId) : null;
+
+        if (!$usuarioId || !$plan) {
+            Log::warning('Webhook de Stripe sin usuario o plan válido', [
+                'usuario_id' => $usuarioId,
+                'plan_id' => $planId,
+            ]);
+
+            return;
+        }
+
+        // La suscripción se actualiza primero: AddSuscripcion reescribe la misma
+        // fila del usuario, así un reintento de Stripe no crea suscripciones duplicadas.
+        $this->activarSuscripcion($usuarioId, $plan->id);
+        $this->registrarPago($usuarioId, $plan->precio, 'pagado');
+    }
+
+    private function activarSuscripcion(string $usuarioId, int|string $planId): void
+    {
+        $solicitud = Request::create('/interno/suscripcion', 'POST', [
+            'usuario_id' => $usuarioId,
+            'plan_id' => $planId,
+        ]);
+
+        $respuesta = app(SuscripcionController::class)->AddSuscripcion($solicitud);
+
+        if ($respuesta->getStatusCode() >= 400) {
+            throw new \RuntimeException(
+                'No se pudo actualizar la suscripción: ' . $respuesta->getContent()
+            );
+        }
+    }
+
+    private function registrarPago(string|int $usuarioId, mixed $monto, string $estado): void
+    {
+        $solicitud = Request::create('/interno/pago', 'POST', [
+            'usuario_id' => $usuarioId,
+            'monto' => $monto,
+            'metodo_pago' => 'stripe',
+            'estado_pago' => $estado,
+        ]);
+
+        $respuesta = app(PagoController::class)->registrarPago($solicitud);
+
+        if ($respuesta->getStatusCode() >= 400) {
+            throw new \RuntimeException(
+                'No se pudo registrar el pago: ' . $respuesta->getContent()
+            );
+        }
+    }
+
+    private function rechazarSiPlanYaActivo(int $usuarioId, int $planId)
+    {
+        $yaActivo = Suscripciones::query()
+            ->where('usuario_id', $usuarioId)
+            ->where('plan_id', $planId)
+            ->where('estado', 'activo')
+            ->where(function ($query) {
+                $query->whereNull('fecha_fin')
+                    ->orWhereDate('fecha_fin', '>=', now()->toDateString());
+            })
+            ->exists();
+
+        if (!$yaActivo) {
+            return null;
+        }
+
+        return response()->json([
+            'error' => 'Ya cuentas con este plan activo actualmente',
+        ], 400);
+    }
+
+    private function validarSolicitudPago(Request $request): array
+    {
+        $validated = $request->validate([
+            'usuario_id' => 'required|integer|exists:usuarios,id',
+            'plan_id' => 'required|integer|exists:planes,id',
+        ]);
+
+        return [
+            'usuario_id' => $validated['usuario_id'],
+            'plan' => Planes::findOrFail($validated['plan_id']),
+        ];
+    }
+
+    private function configurarStripe(): void
+    {
+        Stripe::setApiKey(config('services.stripe.secret'));
+    }
+
+    private function montoEnCentavos(Planes $plan): int
+    {
+        return (int) round(((float) $plan->precio) * 100);
+    }
+
+    private function metadata(mixed $metadata, string $key): ?string
+    {
+        if (is_array($metadata)) {
+            $value = $metadata[$key] ?? null;
+        } elseif (is_object($metadata)) {
+            $value = $metadata->{$key} ?? null;
+        } else {
+            return null;
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (string) $value;
     }
 }

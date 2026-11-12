@@ -1,15 +1,22 @@
 <?php
 
 namespace App\Http\Controllers;
+
+use App\Exceptions\LimitePlanExcedidoException;
 use App\Models\Consulta;
 use Illuminate\Http\Request;
 use App\Models\AltaPaciente;
 use Illuminate\Support\Facades\DB;
 use App\Models\Receta;
 use App\Models\RecetaDetalle;
+use App\Services\LimitePlanService;
 
 class ConsultaController extends Controller
 {
+    public function __construct(private LimitePlanService $limites)
+    {
+    }
+
     public function addConsulta(Request $request)
 {
     $validated = $request->validate([
@@ -74,9 +81,14 @@ public function getByPaciente($pacienteId)
 
 public function finalizarConsulta(Request $request)
 {
+    $request->validate([
+        'doctor_id' => 'required|integer|exists:doctores,id',
+    ]);
+
     DB::beginTransaction();
 
     try {
+        $this->limites->assertPuedeCrearReceta((int) $request->doctor_id);
 
         // 1. CREAR CONSULTA
         $consulta = Consulta::create([
@@ -122,6 +134,10 @@ public function finalizarConsulta(Request $request)
             "receta" => $receta
         ]);
 
+    } catch (LimitePlanExcedidoException $e) {
+        DB::rollBack();
+
+        return response()->json($e->toResponse(), 403);
     } catch (\Exception $e) {
         DB::rollBack();
         return response()->json([

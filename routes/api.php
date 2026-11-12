@@ -401,8 +401,7 @@ Route::post('/AddPlanes', [PlanesController::class, 'AddPlanes']);
 // Ruta para cargar las cards de los planes en React
 Route::get('/Getplanes', [PlanesController::class, 'getPlanes']);
 
-// Ruta para procesar el pago al hacer clic en contratar
-Route::post('/pago', [PlanesController::class, 'pagar']);
+// El cobro con Stripe vive en StripeController (Checkout o PaymentIntent).
 Route::post('/add-suscripcion', [SuscripcionController::class, 'AddSuscripcion']);
 
 /*

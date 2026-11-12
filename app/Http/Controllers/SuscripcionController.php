@@ -12,57 +12,52 @@ use App\Models\Historialsuscripciones;
 class SuscripcionController extends Controller
 {
     public function AddSuscripcion(Request $request)
-{
-    $data = $request->all();
+    {
+        $data = $request->validate([
+            'usuario_id' => 'required|integer|exists:usuarios,id',
+            'plan_id' => 'required|integer|exists:planes,id',
+        ]);
 
-    // Buscar el plan
-    $plan = Planes::find($data['plan_id']);
+        $plan = Planes::findOrFail($data['plan_id']);
 
-    if (!$plan) {
-        return response()->json([
-            'error' => 'Plan no encontrado'
-        ], 404);
-    }
+        $suscripcion = DB::transaction(function () use ($data, $plan) {
+            $anteriores = Suscripciones::query()
+                ->where('usuario_id', $data['usuario_id'])
+                ->lockForUpdate()
+                ->orderByDesc('id')
+                ->get();
 
-    // Desactivar suscripción anterior
-    /*
-    Suscripciones::where('usuario_id', $data['usuario_id'])
-        ->where('estado', 'activo')
-        ->update(['estado' => 'inactivo']);
-    */
+            $planAnterior = $anteriores
+                ->firstWhere('estado', 'activo')
+                ?->plan_id;
 
-$esNuevo = false;
+            $hoy = now()->startOfDay();
 
-$suscripcion = Suscripciones::where('usuario_id', $data['usuario_id'])
-    ->first();
+            foreach ($anteriores as $anterior) {
+                if ($anterior->estado !== 'activo') {
+                    continue;
+                }
 
-$planAnterior = null;
+                $yaVencio = $anterior->fecha_fin
+                    && Carbon::parse($anterior->fecha_fin)->startOfDay()->lt($hoy);
 
-if (!$suscripcion) {
-    $suscripcion = new Suscripciones();
-    $suscripcion->usuario_id = $data['usuario_id'];
-    $esNuevo = true;
-} else {
-    $planAnterior = $suscripcion->plan_id;
-}
+                $anterior->estado = $yaVencio ? 'vencido' : 'inactivo';
+                $anterior->save();
+            }
 
-    $suscripcion->usuario_id = $data['usuario_id'];
-    $suscripcion->plan_id = $data['plan_id'];
-    $suscripcion->estado = 'activo';
-    $suscripcion->fecha_inicio = now();
-    $suscripcion->fecha_fin = now()->addDays($plan->duracion_dias);
-    $suscripcion->creado_en = now();
+            $suscripcion = new Suscripciones();
+            $suscripcion->usuario_id = $data['usuario_id'];
+            $suscripcion->plan_id = $plan->id;
+            $suscripcion->estado = 'activo';
+            $suscripcion->fecha_inicio = now();
+            $suscripcion->fecha_fin = $plan->duracion_dias
+                ? now()->addDays((int) $plan->duracion_dias)
+                : null;
+            $suscripcion->creado_en = now();
+            $suscripcion->save();
 
-    $suscripcion->save();
-
-    ///////////////Nuevo historial /////////////////
-
-
-            // Determinar tipo de cambio
-        $tipoCambio = 'CREACION';
-
-        if (!$esNuevo) {
-            $planAnteriorObj = Planes::find($planAnterior);
+            $tipoCambio = 'CREACION';
+            $planAnteriorObj = $planAnterior ? Planes::find($planAnterior) : null;
 
             if ($planAnteriorObj) {
                 if ($plan->precio > $planAnteriorObj->precio) {
@@ -73,25 +68,23 @@ if (!$suscripcion) {
                     $tipoCambio = 'CAMBIO_PLAN';
                 }
             }
-        }
 
-        Historialsuscripciones::create([
-    'suscripcion_id' => $suscripcion->id,
-    'previous_plan_id' => $planAnterior,
-    'new_plan_id' => $suscripcion->plan_id,
-    //'changed_type' => $esNuevo ? 'CREACION' : 'CAMBIO_PLAN',
-    //'changed_type' => $planAnterior ? 'CAMBIO_PLAN' : 'CREACION',
-    'changed_type' => $tipoCambio,
-    'created_at' => now()
-]);
+            Historialsuscripciones::create([
+                'suscripcion_id' => $suscripcion->id,
+                'previous_plan_id' => $planAnterior,
+                'new_plan_id' => $suscripcion->plan_id,
+                'changed_type' => $tipoCambio,
+                'created_at' => now(),
+            ]);
 
-    //////////
+            return $suscripcion;
+        });
 
-    return response()->json([
-        'message' => 'Suscripción creada',
-        'suscripcion' => $suscripcion
-    ]);
-}
+        return response()->json([
+            'message' => 'Suscripción creada',
+            'suscripcion' => $suscripcion,
+        ]);
+    }
 
 
 

@@ -1,7 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Models\Planes;
+use App\Models\Suscripciones;
 use Illuminate\Http\Request;
 use App\Models\Usuario;
 use App\Models\Doctor;
@@ -58,6 +59,18 @@ $request->validate([
                 'activo' => true,
                 'face_embedding' => $request->face_embedding,
             ]);
+            // 📌 ASIGNAR PLAN FREEMIUM POR DEFECTO
+$planFreemium = Planes::where('slug', 'freemium')->first();
+
+if ($planFreemium) {
+    Suscripciones::create([
+        'usuario_id' => $usuario->id,
+        'plan_id' => $planFreemium->id,
+        'estado' => 'activo',
+        'fecha_inicio' => now(),
+        'fecha_fin' => $planFreemium->duracion_dias ? now()->addDays($planFreemium->duracion_dias) : null,
+    ]);
+}
 
             //  ROLES
 

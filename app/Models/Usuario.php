@@ -68,7 +68,7 @@ public function farmacia()
     public function suscripciones()
 {
     //antes hasMany, ahora hasOne
-    return $this->hasOne(Suscripciones::class, 'usuario_id');
+    return $this->hasOne(Suscripciones::class, 'usuario_id')->latestOfMany();
 }
 
     // NUEVO: Relación con el historial de pagos
