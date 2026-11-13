@@ -21,7 +21,7 @@ class DoctorController extends Controller
             'cedula_profesional'   => 'required|string|max:30|unique:doctores,cedula_profesional',
             'anios_exp'            => 'nullable|integer|min:0',
             'telefono'             => 'nullable|string|max:20',
-            'imagen'               => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'imagen'               => 'nullable|image|mimes:jpg,jpeg,png|max:5120',
             // clinica_id ya no se hardcodea a 1: se toma del usuario autenticado
             // o se recibe explícito si el flujo lo requiere (ej. superadmin creando en otra clínica).
             'clinica_id'           => 'nullable|integer|exists:clinicas,id',
