@@ -486,3 +486,8 @@ Route::delete('/expediente-archivos/{id}', [ExpedienteArchivoController::class, 
 
 
 Route::post('/reporte-habitacion', [ReporteHabitacionController::class, 'postApiAddRegistro']);
+Route::get('/reportes-completo', [ReporteHabitacionController::class, 'postApiGetRegistros']);
+Route::put(
+    '/reporte-habitacion/{id}/status',
+    [ReporteHabitacionController::class, 'actualizarStatus']
+);
