@@ -28,6 +28,7 @@ use App\Http\Controllers\ConsultorioController;
 use App\Http\Controllers\TipoPagoDoctorController;
 use App\Http\Controllers\PagoDoctorController;
 use App\Http\Controllers\HorarioDoctorController;
+use App\Http\Controllers\SesionDoctorController;
 use App\Http\Controllers\MedicamentosCaducadosController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\HabitacionController;
@@ -385,6 +386,8 @@ Route::get('/perfil/{id}', [PerfilController::class, 'obtenerPerfil']);
 
 
 
+Route::get('/sesiones-doctores', [SesionDoctorController::class, 'historial']);
+
 Route::get('/doctores',[DoctorController::class,'index']);
 Route::post('/doctores',[DoctorController::class,'store']);
 Route::put('/doctores/{id}',[DoctorController::class,'update']);
@@ -400,9 +403,9 @@ Route::post('/AddPlanes', [PlanesController::class, 'AddPlanes']);
 
 // Ruta para cargar las cards de los planes en React
 Route::get('/Getplanes', [PlanesController::class, 'getPlanes']);
+Route::get('/suscripcion-activa', [SuscripcionController::class, 'activa']);
 
-// Ruta para procesar el pago al hacer clic en contratar
-Route::post('/pago', [PlanesController::class, 'pagar']);
+// El cobro con Stripe vive en StripeController (Checkout o PaymentIntent).
 Route::post('/add-suscripcion', [SuscripcionController::class, 'AddSuscripcion']);
 
 /*

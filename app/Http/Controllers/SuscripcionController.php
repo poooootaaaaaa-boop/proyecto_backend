@@ -11,58 +11,89 @@ use App\Models\Historialsuscripciones;
 
 class SuscripcionController extends Controller
 {
-    public function AddSuscripcion(Request $request)
-{
-    $data = $request->all();
+    public function activa(Request $request)
+    {
+        $data = $request->validate([
+            'usuario_id' => 'required|integer|exists:usuarios,id',
+        ]);
 
-    // Buscar el plan
-    $plan = Planes::find($data['plan_id']);
+        $suscripcion = Suscripciones::query()
+            ->with('plan')
+            ->where('usuario_id', $data['usuario_id'])
+            ->where('estado', 'activo')
+            ->where(function ($query) {
+                $query->whereNull('fecha_fin')
+                    ->orWhereDate('fecha_fin', '>=', now()->toDateString());
+            })
+            ->orderByDesc('id')
+            ->first();
 
-    if (!$plan) {
+        if (!$suscripcion || !$suscripcion->plan) {
+            return response()->json([
+                'plan_id' => null,
+                'es_pago' => false,
+            ]);
+        }
+
+        $nombre = strtolower((string) $suscripcion->plan->nombre);
+        $slug = strtolower((string) ($suscripcion->plan->slug ?? ''));
+        $esGratuito = (float) $suscripcion->plan->precio <= 0
+            || str_contains($nombre, 'freem')
+            || str_contains($slug, 'freem');
+
         return response()->json([
-            'error' => 'Plan no encontrado'
-        ], 404);
+            'plan_id' => $suscripcion->plan_id,
+            'es_pago' => !$esGratuito,
+        ]);
     }
 
-    // Desactivar suscripción anterior
-    /*
-    Suscripciones::where('usuario_id', $data['usuario_id'])
-        ->where('estado', 'activo')
-        ->update(['estado' => 'inactivo']);
-    */
+    public function AddSuscripcion(Request $request)
+    {
+        $data = $request->validate([
+            'usuario_id' => 'required|integer|exists:usuarios,id',
+            'plan_id' => 'required|integer|exists:planes,id',
+        ]);
 
-$esNuevo = false;
+        $plan = Planes::findOrFail($data['plan_id']);
 
-$suscripcion = Suscripciones::where('usuario_id', $data['usuario_id'])
-    ->first();
+        $suscripcion = DB::transaction(function () use ($data, $plan) {
+            $anteriores = Suscripciones::query()
+                ->where('usuario_id', $data['usuario_id'])
+                ->lockForUpdate()
+                ->orderByDesc('id')
+                ->get();
 
-$planAnterior = null;
+            $planAnterior = $anteriores
+                ->firstWhere('estado', 'activo')
+                ?->plan_id;
 
-if (!$suscripcion) {
-    $suscripcion = new Suscripciones();
-    $suscripcion->usuario_id = $data['usuario_id'];
-    $esNuevo = true;
-} else {
-    $planAnterior = $suscripcion->plan_id;
-}
+            $hoy = now()->startOfDay();
 
-    $suscripcion->usuario_id = $data['usuario_id'];
-    $suscripcion->plan_id = $data['plan_id'];
-    $suscripcion->estado = 'activo';
-    $suscripcion->fecha_inicio = now();
-    $suscripcion->fecha_fin = now()->addDays($plan->duracion_dias);
-    $suscripcion->creado_en = now();
+            foreach ($anteriores as $anterior) {
+                if ($anterior->estado !== 'activo') {
+                    continue;
+                }
 
-    $suscripcion->save();
+                $yaVencio = $anterior->fecha_fin
+                    && Carbon::parse($anterior->fecha_fin)->startOfDay()->lt($hoy);
 
-    ///////////////Nuevo historial /////////////////
+                $anterior->estado = $yaVencio ? 'vencido' : 'inactivo';
+                $anterior->save();
+            }
 
+            $suscripcion = new Suscripciones();
+            $suscripcion->usuario_id = $data['usuario_id'];
+            $suscripcion->plan_id = $plan->id;
+            $suscripcion->estado = 'activo';
+            $suscripcion->fecha_inicio = now();
+            $suscripcion->fecha_fin = $plan->duracion_dias
+                ? now()->addDays((int) $plan->duracion_dias)
+                : null;
+            $suscripcion->creado_en = now();
+            $suscripcion->save();
 
-            // Determinar tipo de cambio
-        $tipoCambio = 'CREACION';
-
-        if (!$esNuevo) {
-            $planAnteriorObj = Planes::find($planAnterior);
+            $tipoCambio = 'CREACION';
+            $planAnteriorObj = $planAnterior ? Planes::find($planAnterior) : null;
 
             if ($planAnteriorObj) {
                 if ($plan->precio > $planAnteriorObj->precio) {
@@ -73,25 +104,23 @@ if (!$suscripcion) {
                     $tipoCambio = 'CAMBIO_PLAN';
                 }
             }
-        }
 
-        Historialsuscripciones::create([
-    'suscripcion_id' => $suscripcion->id,
-    'previous_plan_id' => $planAnterior,
-    'new_plan_id' => $suscripcion->plan_id,
-    //'changed_type' => $esNuevo ? 'CREACION' : 'CAMBIO_PLAN',
-    //'changed_type' => $planAnterior ? 'CAMBIO_PLAN' : 'CREACION',
-    'changed_type' => $tipoCambio,
-    'created_at' => now()
-]);
+            Historialsuscripciones::create([
+                'suscripcion_id' => $suscripcion->id,
+                'previous_plan_id' => $planAnterior,
+                'new_plan_id' => $suscripcion->plan_id,
+                'changed_type' => $tipoCambio,
+                'created_at' => now(),
+            ]);
 
-    //////////
+            return $suscripcion;
+        });
 
-    return response()->json([
-        'message' => 'Suscripción creada',
-        'suscripcion' => $suscripcion
-    ]);
-}
+        return response()->json([
+            'message' => 'Suscripción creada',
+            'suscripcion' => $suscripcion,
+        ]);
+    }
 
 
 
