@@ -41,26 +41,84 @@ use App\Http\Controllers\FirmaRegistradaController;
 use App\Http\Controllers\HospitalizacionController;
 use App\Http\Controllers\ReporteHabitacionController;
 use App\Http\Controllers\ControlAlimentoController;
+use App\Http\Controllers\InsumoEstanciaController;
+use App\Http\Controllers\EstanciaController;
+use App\Http\Controllers\PuestoController;
+use App\Http\Controllers\EmpleadoController;
+use App\Http\Controllers\HorarioEmpleadoController;
+use App\Http\Controllers\PermisoEmpleadoController;
+use App\Http\Controllers\VacacionEmpleadoController;
+use App\Http\Controllers\HistorialLaboralController;
 
 
 
+Route::prefix('personal')->group(function () {
+ 
+    // Resumen / KPIs
+    Route::get('/resumen', [EmpleadoController::class, 'resumen']);
+ 
+    // CLIC-386 · Puestos
+    Route::get('/puestos', [PuestoController::class, 'index']);
+    Route::post('/puestos', [PuestoController::class, 'store']);
+    Route::put('/puestos/{puesto}', [PuestoController::class, 'update']);
+    Route::delete('/puestos/{puesto}', [PuestoController::class, 'destroy']);
+ 
+    // CLIC-385 · Empleados
+    Route::get('/empleados', [EmpleadoController::class, 'index']);
+    Route::post('/empleados', [EmpleadoController::class, 'store']);
+    Route::get('/empleados/{empleado}', [EmpleadoController::class, 'show']);
+    Route::put('/empleados/{empleado}', [EmpleadoController::class, 'update']);
+    Route::post('/empleados/{empleado}/baja', [EmpleadoController::class, 'baja']);
+    Route::post('/empleados/{empleado}/reactivar', [EmpleadoController::class, 'reactivar']);
+ 
+    // CLIC-387 · Horarios
+    Route::get('/horarios', [HorarioEmpleadoController::class, 'index']);
+    Route::put('/empleados/{empleado}/horarios', [HorarioEmpleadoController::class, 'sync']);
+ 
+    // CLIC-388 · Permisos
+    Route::get('/permisos', [PermisoEmpleadoController::class, 'index']);
+    Route::post('/permisos', [PermisoEmpleadoController::class, 'store']);
+    Route::post('/permisos/{permiso}/resolver', [PermisoEmpleadoController::class, 'resolver']);
+ 
+    // CLIC-389 · Vacaciones
+    Route::get('/vacaciones', [VacacionEmpleadoController::class, 'index']);
+    Route::post('/vacaciones', [VacacionEmpleadoController::class, 'store']);
+    Route::post('/vacaciones/{vacacion}/resolver', [VacacionEmpleadoController::class, 'resolver']);
+    Route::get('/empleados/{empleado}/vacaciones-saldo', [VacacionEmpleadoController::class, 'saldo']);
+ 
+    // CLIC-390 · Historial laboral
+    Route::get('/historial', [HistorialLaboralController::class, 'index']);
+    Route::post('/historial', [HistorialLaboralController::class, 'store']);
+});
+Route::get('/hospitalizaciones/{ocupacion}/doctores-vinculados', [InsumoEstanciaController::class, 'doctoresVinculados']);
 
 
 Route::post('/hospitalizaciones/{ocupacion}/traslado', [HospitalizacionController::class, 'trasladar']);
 Route::get('/hospitalizaciones/{ocupacion}/traslados', [HospitalizacionController::class, 'historialTraslados']);
-Route::get('/consentimientos', [HospitalizacionController::class, 'listarDocumentos']);
 Route::post('/consentimientos/{consentimiento}/finalizar', [HospitalizacionController::class, 'finalizarConsentimiento']);
-Route::get('/consentimientos', [HospitalizacionController::class, 'listarDocumentos']);
 Route::post('/control-alimentos',[ControlAlimentoController::class,'postApiAddControlAlimento']);
 
 /*NUEVO*/
 Route::get('/hospitalizaciones/activas', [HospitalizacionController::class, 'activas']);
+Route::get('/hospitalizaciones/doctor/{doctor}/activas', [EstanciaController::class, 'activasDoctor']);
+Route::get('/hospitalizaciones/{ocupacion}/seguimiento', [EstanciaController::class, 'detalle']);
+Route::post('/hospitalizaciones/{ocupacion}/evolucion', [EstanciaController::class, 'evolucion']);
+Route::post('/hospitalizaciones/{ocupacion}/procedimientos', [EstanciaController::class, 'procedimiento']);
+Route::post('/hospitalizaciones/{ocupacion}/observaciones', [EstanciaController::class, 'observacion']);
+Route::post('/hospitalizaciones/{ocupacion}/consumos', [EstanciaController::class, 'consumo']);
+Route::get('/hospitalizaciones/{ocupacion}/reporte-final', [EstanciaController::class, 'reporteFinal']);
+Route::get('/hospitalizaciones/{ocupacion}/reporte-final/pdf', [EstanciaController::class, 'pdfFinal']);
+Route::get('/hospitalizaciones/paciente/{paciente}/estancias', [EstanciaController::class, 'historialPaciente']);
 Route::post('/hospitalizaciones', [HospitalizacionController::class, 'ingresar']);
 Route::post('/hospitalizaciones/{ocupacion}/alta', [HospitalizacionController::class, 'darDeAlta']);
 Route::get('/hospitalizaciones/paciente/{paciente}/historial', [HospitalizacionController::class, 'historialPaciente']);
 Route::get('/hospitalizaciones/reporte', [HospitalizacionController::class, 'reporte']);
+Route::get('/hospitalizacion-documentos', [HospitalizacionController::class, 'documentos']);
+Route::get('/hospitalizacion-documentos/{documento}/pdf', [HospitalizacionController::class, 'descargarDocumento']);
 Route::get('/habitaciones/disponibles', [HospitalizacionController::class, 'habitacionesDisponibles']);
 Route::patch('/habitaciones/{habitacion}/estado', [HospitalizacionController::class, 'actualizarEstadoHabitacion']); // nuevo: control manual de limpieza/mantenimiento
+Route::apiResource('insumos-estancia', InsumoEstanciaController::class)
+    ->parameters(['insumos-estancia' => 'insumoEstancia']);
 Route::get('/consentimientos',[ConsentimientoController::class, 'index']);
 
 Route::post(
@@ -337,8 +395,14 @@ Route::delete('/doctores/{id}',[DoctorController::class,'destroy']);
 //->middleware('check.suscripcion');
 
 Route::post('/AddPlanes', [PlanesController::class, 'AddPlanes']);
-Route::get('/Getplanes', [PlanesController::class, 'GetPlanes']);
 
+
+
+// Ruta para cargar las cards de los planes en React
+Route::get('/Getplanes', [PlanesController::class, 'getPlanes']);
+
+// Ruta para procesar el pago al hacer clic en contratar
+Route::post('/pago', [PlanesController::class, 'pagar']);
 Route::post('/add-suscripcion', [SuscripcionController::class, 'AddSuscripcion']);
 
 /*
