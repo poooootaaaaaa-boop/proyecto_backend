@@ -11,6 +11,42 @@ use App\Models\Historialsuscripciones;
 
 class SuscripcionController extends Controller
 {
+    public function activa(Request $request)
+    {
+        $data = $request->validate([
+            'usuario_id' => 'required|integer|exists:usuarios,id',
+        ]);
+
+        $suscripcion = Suscripciones::query()
+            ->with('plan')
+            ->where('usuario_id', $data['usuario_id'])
+            ->where('estado', 'activo')
+            ->where(function ($query) {
+                $query->whereNull('fecha_fin')
+                    ->orWhereDate('fecha_fin', '>=', now()->toDateString());
+            })
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$suscripcion || !$suscripcion->plan) {
+            return response()->json([
+                'plan_id' => null,
+                'es_pago' => false,
+            ]);
+        }
+
+        $nombre = strtolower((string) $suscripcion->plan->nombre);
+        $slug = strtolower((string) ($suscripcion->plan->slug ?? ''));
+        $esGratuito = (float) $suscripcion->plan->precio <= 0
+            || str_contains($nombre, 'freem')
+            || str_contains($slug, 'freem');
+
+        return response()->json([
+            'plan_id' => $suscripcion->plan_id,
+            'es_pago' => !$esGratuito,
+        ]);
+    }
+
     public function AddSuscripcion(Request $request)
     {
         $data = $request->validate([
