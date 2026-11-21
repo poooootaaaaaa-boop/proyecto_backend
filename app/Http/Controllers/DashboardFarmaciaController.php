@@ -52,7 +52,8 @@ class DashboardFarmaciaController extends Controller
                 'm.nombre',
                 'i.stock',
                 'i.stock_minimo as minimo',
-                DB::raw('DATEDIFF(i.fecha_caducidad, CURDATE()) as caducaEn')
+                // PostgreSQL: resta de fechas en vez de DATEDIFF(a, b) + CURDATE()
+                DB::raw('(i.fecha_caducidad - CURRENT_DATE) as "caducaEn"')
             )
             ->get();
 
@@ -70,8 +71,10 @@ class DashboardFarmaciaController extends Controller
             ->select(
                 'r.id',
                 'u.nombre as paciente',
-                DB::raw('GROUP_CONCAT(m.nombre SEPARATOR ", ") as medicamento'),
-                DB::raw('TIME(r.creado_en) as hora'),
+                // PostgreSQL: STRING_AGG en vez de GROUP_CONCAT
+                DB::raw("STRING_AGG(m.nombre, ', ') as medicamento"),
+                // PostgreSQL: TO_CHAR en vez de TIME()
+                DB::raw("TO_CHAR(r.creado_en, 'HH24:MI:SS') as hora"),
                 'r.estado as prioridad'
             )
             ->whereBetween('r.creado_en', [$inicio, $fin])
@@ -97,48 +100,48 @@ class DashboardFarmaciaController extends Controller
         // ================================
         // RECETAS (CON PAGINACIÓN)
         // ================================
- $perPage = $request->input('per_page', 5);
+        $perPage = $request->input('per_page', 5);
 
-$recetas = DB::table('recetas as r')
-   ->join('pacientes as p', 'r.paciente_id', '=', 'p.id')
-   ->join('usuarios as u', 'p.usuario_id', '=', 'u.id')
+        $recetas = DB::table('recetas as r')
+            ->join('pacientes as p', 'r.paciente_id', '=', 'p.id')
+            ->join('usuarios as u', 'p.usuario_id', '=', 'u.id')
 
-   //  DOCTOR
-   ->leftJoin('doctores as doc', 'r.doctor_id', '=', 'doc.id')
-   ->leftJoin('usuarios as u_doc', 'doc.usuario_id', '=', 'u_doc.id')
+            //  DOCTOR
+            ->leftJoin('doctores as doc', 'r.doctor_id', '=', 'doc.id')
+            ->leftJoin('usuarios as u_doc', 'doc.usuario_id', '=', 'u_doc.id')
 
-   ->leftJoin('receta_detalle as rd', 'r.id', '=', 'rd.receta_id')
-   ->leftJoin('medicamentos as m', 'rd.medicamento_id', '=', 'm.id')
+            ->leftJoin('receta_detalle as rd', 'r.id', '=', 'rd.receta_id')
+            ->leftJoin('medicamentos as m', 'rd.medicamento_id', '=', 'm.id')
 
-->select(
-    'r.id',
-    'r.doctor_id',
+            ->select(
+                'r.id',
+                'r.doctor_id',
 
-    'u.nombre as paciente',
+                'u.nombre as paciente',
 
-    DB::raw('GROUP_CONCAT(m.nombre SEPARATOR ", ") as medicamento'),
-    DB::raw('TIME(r.creado_en) as hora'),
-    'r.estado as prioridad',
+                DB::raw("STRING_AGG(m.nombre, ', ') as medicamento"),
+                DB::raw("TO_CHAR(r.creado_en, 'HH24:MI:SS') as hora"),
+                'r.estado as prioridad',
 
-    //  DOCTOR
-    'u_doc.nombre as doctor',
-    'u_doc.foto_url as foto_doctor',
-    //  PACIENTE FOTO
-    'u.foto_url as foto_paciente'
-)
-   ->whereBetween('r.creado_en', [$inicio, $fin])
-->groupBy(
-    'r.id',
-    'r.doctor_id',
-    'u.nombre',
-    'u.foto_url', // paciente
-    'u_doc.nombre', // doctor nombre
-    'u_doc.foto_url',
-    'r.creado_en',
-    'r.estado'
-)
-   ->orderBy('r.creado_en', 'desc')
-   ->paginate($perPage);
+                //  DOCTOR
+                'u_doc.nombre as doctor',
+                'u_doc.foto_url as foto_doctor',
+                //  PACIENTE FOTO
+                'u.foto_url as foto_paciente'
+            )
+            ->whereBetween('r.creado_en', [$inicio, $fin])
+            ->groupBy(
+                'r.id',
+                'r.doctor_id',
+                'u.nombre',
+                'u.foto_url', // paciente
+                'u_doc.nombre', // doctor nombre
+                'u_doc.foto_url',
+                'r.creado_en',
+                'r.estado'
+            )
+            ->orderBy('r.creado_en', 'desc')
+            ->paginate($perPage);
 
         // ================================
         // RESPUESTA
@@ -157,62 +160,63 @@ $recetas = DB::table('recetas as r')
     }
 
     public function mostrar_imagen_usuario($nombre_imagen)
-{
-    $path = storage_path('app/public/fotos/usuarios/' . $nombre_imagen);
+    {
+        $path = storage_path('app/public/fotos/usuarios/' . $nombre_imagen);
 
-    if (!File::exists($path)) {
-        abort(404);
+        if (!File::exists($path)) {
+            abort(404);
+        }
+
+        $file = File::get($path);
+        $type = File::mimeType($path);
+
+        return Response::make($file, 200)->header("Content-Type", $type);
     }
 
-    $file = File::get($path);
-    $type = File::mimeType($path);
+    public function recetasHoy(Request $request)
+    {
+        $perPage = $request->input('per_page', 5);
 
-    return Response::make($file, 200)->header("Content-Type", $type);
-}
+        $hoyInicio = Carbon::today()->startOfDay();
+        $hoyFin = Carbon::today()->endOfDay();
 
-public function recetasHoy(Request $request)
-{
-    $perPage = $request->input('per_page', 5);
+        $recetas = DB::table('recetas as r')
+            ->join('pacientes as p', 'r.paciente_id', '=', 'p.id')
+            ->join('usuarios as u', 'p.usuario_id', '=', 'u.id')
 
-    $hoyInicio = Carbon::today()->startOfDay();
-    $hoyFin = Carbon::today()->endOfDay();
+            ->leftJoin('doctores as doc', 'r.doctor_id', '=', 'doc.id')
+            ->leftJoin('usuarios as u_doc', 'doc.usuario_id', '=', 'u_doc.id')
 
-    $recetas = DB::table('recetas as r')
-        ->join('pacientes as p', 'r.paciente_id', '=', 'p.id')
-        ->join('usuarios as u', 'p.usuario_id', '=', 'u.id')
+            ->leftJoin('receta_detalle as rd', 'r.id', '=', 'rd.receta_id')
+            ->leftJoin('medicamentos as m', 'rd.medicamento_id', '=', 'm.id')
+            ->leftJoin('inventario as i', 'm.id', '=', 'i.medicamento_id')
 
-        ->leftJoin('doctores as doc', 'r.doctor_id', '=', 'doc.id')
-        ->leftJoin('usuarios as u_doc', 'doc.usuario_id', '=', 'u_doc.id')
+            ->select(
+                'r.id',
+                'r.estado',
+                'u.nombre as paciente',
+                'u.foto_url as foto_paciente',
+                'u_doc.nombre as doctor',
+                DB::raw("TO_CHAR(r.creado_en, 'HH24:MI:SS') as hora"),
 
-        ->leftJoin('receta_detalle as rd', 'r.id', '=', 'rd.receta_id')
-        ->leftJoin('medicamentos as m', 'rd.medicamento_id', '=', 'm.id')
-        ->leftJoin('inventario as i', 'm.id', '=', 'i.medicamento_id')
+                // PostgreSQL: STRING_AGG + CONCAT + COALESCE en vez de GROUP_CONCAT + IFNULL
+                DB::raw("STRING_AGG(
+                    CONCAT(
+                        m.nombre, '|',
+                        m.presentacion, '|',
+                        m.requiere_receta, '|',
+                        COALESCE(i.stock, 0), '|',
+                        COALESCE(i.precio_venta, 0)
+                    ), ';;'
+                ) as medicamentos")
+            )
+            ->groupBy('r.id', 'r.estado', 'u.nombre', 'u.foto_url', 'u_doc.nombre', 'r.creado_en')
+            ->whereBetween('r.creado_en', [$hoyInicio, $hoyFin])
+            ->orderBy('r.creado_en', 'desc')
+            ->paginate($perPage);
 
- ->select(
-    'r.id',
-    'r.estado',
-    'u.nombre as paciente',
-    'u.foto_url as foto_paciente',
-    'u_doc.nombre as doctor',
-    DB::raw('TIME(r.creado_en) as hora'),
-
-    DB::raw('GROUP_CONCAT(
-        CONCAT(
-            m.nombre, "|",
-            m.presentacion, "|",
-            m.requiere_receta, "|",
-            IFNULL(i.stock,0), "|",
-            IFNULL(i.precio_venta,0)
-        ) SEPARATOR ";;"
-    ) as medicamentos')
-)
-->groupBy('r.id', 'r.estado', 'u.nombre', 'u.foto_url', 'u_doc.nombre', 'r.creado_en')
-        ->whereBetween('r.creado_en', [$hoyInicio, $hoyFin])
-        ->orderBy('r.creado_en', 'desc')
-        ->paginate($perPage);
-
-    return response()->json([
-        'recetas' => $recetas
-    ]);
-}
+        return response()->json([
+            'recetas' => $recetas
+        ]);
+    }
 }
