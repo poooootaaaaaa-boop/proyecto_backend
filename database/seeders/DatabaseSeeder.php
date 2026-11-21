@@ -15,10 +15,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RolesSeeder::class,
-<<<<<<< HEAD
-=======
             EspecialidadesSeeder::class,
->>>>>>> f3d217348004769c5712e2314f229b6099d76cc4
             UsuariosSeeder::class,
             ClinicasSeeder::class,
             EspecialidadesSeeder::class,
@@ -78,10 +75,6 @@ class DatabaseSeeder extends Seeder
             TrasladosHabitacionSeeder::class,
             TrasladoFirmasSeeder::class,
             UsersSeeder::class,
-<<<<<<< HEAD
-            UsuarioNotificacionesSeeder::class,
-=======
->>>>>>> f3d217348004769c5712e2314f229b6099d76cc4
         ]);
 
         // Resetea todas las secuencias de PostgreSQL después de sembrar,
