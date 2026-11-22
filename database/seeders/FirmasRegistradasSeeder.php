@@ -13,7 +13,7 @@ class FirmasRegistradasSeeder extends Seeder
     public function run(): void
     {
         // Placeholder: PNG transparente de 1x1 px (la firma original era una imagen grande).
-        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+        $png = '\\x' . bin2hex(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
 
         $rows = [
             ['id' => 1, 'tipo' => 'Clinica', 'referencia_id' => 7, 'firma' => $png, 'mime' => 'image/png', 'created_at' => '2026-09-21 00:27:52', 'updated_at' => '2026-09-21 00:27:52'],

@@ -37,11 +37,7 @@ return new class extends Migration
 
             $table->string('pdf')->nullable();
 
-            $table->enum('estado', [
-                'Pendiente',
-                'Firmado',
-                'Cancelado'
-            ])->default('Pendiente');
+            $table->enum('estado', ['Pendiente', 'Firmado', 'Finalizado'])->default('Pendiente');
 
             $table->timestamp('fecha_firma')->nullable();
 
